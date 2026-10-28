@@ -1,0 +1,68 @@
+<!DOCTYPE html><html lang="bn"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Aviator Live</title>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script><script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script><script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<style>*{margin:0;padding:0;box-sizing:border-box;font-family:sans-serif}body{background:#080c1e;color:#fff}.topbar{background:#121735;padding:12px 15px;display:flex;justify-content:space-between;border-bottom:2px solid #ff0040;position:sticky;top:0;z-index:50}.bal{background:#1d224d;border:1px solid #00ff88;color:#00ff88;padding:7px 16px;border-radius:20px;font-weight:800}.game-area{background:radial-gradient(circle at 30% 80%,#1c2250,#080c1e);height:360px;position:relative;border-radius:16px;margin:12px;border:1px solid #222;overflow:hidden}.plane{position:absolute;left:10%;bottom:20%;font-size:36px;transition:0.08s}.mult{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-size:56px;font-weight:900;text-align:center}.mult.wait{color:#ffaa00;font-size:28px}.mult.crash{color:#ff0040}.line{position:absolute;bottom:0;left:0;height:6px;background:linear-gradient(90deg,#ff0040,#ffaa00);width:0%}.bet-timer{position:absolute;top:12px;left:50%;transform:translateX(-50%);background:#ffaa00;color:#000;padding:6px 14px;border-radius:20px;font-weight:800;font-size:13px}.controls{background:#121735;margin:12px;border-radius:16px;padding:14px;border:1px solid #222}.bet-btn{background:#1d224d;border:1px solid #333;color:#fff;padding:9px 14px;border-radius:10px;margin:3px}.bet-btn.active{background:#ff0040}.btn{padding:13px;border-radius:12px;border:none;font-weight:800;cursor:pointer;width:100%;margin-top:8px}.btn-bet{background:#00c851;color:#fff}.btn-cash{background:#ffaa00;color:#000}.btn-dep{background:#00a8ff;color:#fff}.btn-with{background:linear-gradient(90deg,#ff0040,#ff6a00);color:#fff}.input{width:100%;padding:11px;border-radius:10px;border:1px solid #333;background:#080c1e;color:#fff;margin-bottom:9px}.modal{position:fixed;inset:0;background:rgba(0,0,0,0.85);display:none;align-items:center;justify-content:center;z-index:100;padding:15px}.modal.show{display:flex}.modal-box{background:#121735;border:1px solid #333;border-radius:16px;padding:18px;width:100%;max-width:380px}.history{display:flex;gap:6px;overflow:auto;padding:10px;background:#0f1333}
+</style></head><body>
+<div class="topbar"><div style="font-weight:900;color:#ff0040">✈️ AVIATOR LIVE</div><div class="bal">৳<span id="balTop">0</span></div></div>
+<div style="max-width:520px;margin:auto">
+<div id="authBox" style="margin:12px"><div style="background:#121735;border-radius:16px;padding:18px;border:1px solid #00a8ff"><h3 style="color:#00a8ff;text-align:center">👤 Login</h3><br><input id="nameIn" class="input" placeholder="Name"><input id="phoneIn" class="input" placeholder="Phone"><input id="emailIn" class="input" placeholder="Email"><input id="passIn" class="input" type="password" placeholder="Pass"><button class="btn btn-bet" onclick="signup()">SIGNUP</button><button class="btn btn-dep" onclick="login()">LOGIN</button></div></div>
+<div id="gameBox" style="display:none">
+<div class="history" id="histBar"></div>
+<div class="game-area"><div class="bet-timer" id="betTimer">SYNCING...</div><div class="mult wait" id="mult">LOADING...</div><div class="plane" id="plane">✈️</div><div class="line" id="line"></div></div>
+<div class="controls">
+<button class="bet-btn" onclick="setBet(10,this)">৳10</button><button class="bet-btn active" onclick="setBet(20,this)">৳20</button><button class="bet-btn" onclick="setBet(100,this)">৳100</button><button class="bet-btn" onclick="setBet(500,this)">৳500</button>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px"><button class="btn btn-bet" id="betBtn" onclick="placeBet()">BET ৳20</button><button class="btn btn-cash" id="cashBtn" onclick="cashOut()" disabled>CASHOUT</button></div>
+<button class="btn btn-dep" onclick="window.open('https://casino99.netlify.app/','_blank')">💳 DEPOSIT</button><button class="btn btn-with" onclick="openWithdraw()">💸 WITHDRAW</button>
+</div></div></div>
+<div class="modal" id="wModal"><div class="modal-box"><h3 style="text-align:center">Withdraw</h3><br>Bal ৳<span id="balModal">0</span><br><br><input id="bkashNum" class="input" placeholder="bKash Number"><input id="wAmount" class="input" type="number" placeholder="Amount"><button class="btn btn-with" onclick="submitWithdraw()">WITHDRAW</button><button class="btn" style="background:#222;color:#fff" onclick="closeWithdraw()">Cancel</button></div></div>
+<script>
+const firebaseConfig={apiKey:"AIzaSyABNl-z1-x4dmJfNHoZVQHqRE5XnRHeB10",authDomain:"omor-7f5b7.firebaseapp.com",databaseURL:"https://omor-7f5b7-default-rtdb.firebaseio.com",projectId:"omor-7f5b7",storageBucket:"omor-7f5b7.firebasestorage.app",messagingSenderId:"170819945184",appId:"1:170819945184:web:4b7a0c2e5d8f9a0b1c2d3e"};
+firebase.initializeApp(firebaseConfig); const auth=firebase.auth(), db=firebase.database();
+let user=null,balance=0,bet=20,mult=1,betPlaced=false,cashed=false,gameStatus='waiting',isHost=false,hostTimer=null,waitTimer=null,flyTimer=null,waitSec=20,myId=Math.random().toString(36).substr(2,5), crashAt=0;
+auth.onAuthStateChanged(u=>{if(u){user=u; db.ref('users/'+u.uid).on('value',s=>{if(s.exists()){balance=s.val().balance||0; balTop.innerText=balance; balModal.innerText=balance; authBox.style.display='none'; gameBox.style.display='block';}});}else{authBox.style.display='block'; gameBox.style.display='none';}});
+function signup(){let n=nameIn.value, ph=phoneIn.value, em=emailIn.value, pw=passIn.value; if(!n||!ph||!em||!pw) return alert('পূরণ করো'); auth.createUserWithEmailAndPassword(em,pw).then(c=>{db.ref('users/'+c.user.uid).set({name:n,phone:ph,email:em,balance:0});}).catch(e=>alert(e.message));}
+function login(){auth.signInWithEmailAndPassword(emailIn.value,passIn.value).catch(e=>alert(e.message));}
+function setBet(a,el){bet=a; document.querySelectorAll('.bet-btn').forEach(b=>b.classList.remove('active')); el.classList.add('active'); if(gameStatus=='waiting') betBtn.innerText='BET ৳'+a;}
+function updBal(nb){balance=nb; balTop.innerText=balance; balModal.innerText=balance; db.ref('users/'+user.uid+'/balance').set(balance);}
+function placeBet(){
+  if(gameStatus!=='waiting'){
+    alert('⛔ BET TIME শেষ! Plane উড়ছে এখন। পরের রাউন্ডের জন্য অপেক্ষা করো');
+    return;
+  }
+  if(balance<bet){alert('Balance কম'); window.open('https://superchat.bd/avaito1ala','_blank'); return;}
+  if(betPlaced) return;
+  updBal(balance-bet); betPlaced=true; cashed=false;
+  betBtn.disabled=true; betBtn.innerText='BET PLACED ✓';
+  cashBtn.disabled=false;
+}
+function cashOut(){if(!betPlaced||cashed) return; cashed=true; let win=Math.floor(bet*mult); updBal(balance+win); cashBtn.innerText='WON ৳'+win; setTimeout(()=>{cashBtn.disabled=true; cashBtn.innerText='CASHOUT';},1000);}
+function openWithdraw(){wModal.classList.add('show');} function closeWithdraw(){wModal.classList.remove('show');}
+function submitWithdraw(){let num=bkashNum.value.trim(), amt=parseInt(wAmount.value); if(!num||!amt) return alert('দাও'); if(amt<100) return alert('Min 100'); if(amt>balance) return alert('কম'); updBal(balance-amt); db.ref('withdrawRequests').push({uid:user.uid,bkashNumber:num,amount:amt,status:'pending',time:Date.now()}); alert('Request ৳'+amt); closeWithdraw();}
+function tryBecomeHost(){db.ref('multiplayerGame/hostHeartbeat').once('value').then(s=>{let last=s.val()||0; if(Date.now()-last>6000){isHost=true; db.ref('multiplayerGame/hostId').set(myId); startHeartbeat(); db.ref('multiplayerGame').once('value').then(g=>{let gv=g.val(); if(!gv || Date.now()-gv.updatedAt>12000) startWaitingAsHost();});}});}
+function startHeartbeat(){clearInterval(hostTimer); hostTimer=setInterval(()=>{if(isHost) db.ref('multiplayerGame/hostHeartbeat').set(Date.now());},2000);}
+function newCrash(){let c=(Math.random()*6+1.2).toFixed(2); if(Math.random()>0.65) c=(Math.random()*0.9+1.05).toFixed(2); return parseFloat(c);}
+function startWaitingAsHost(){clearInterval(waitTimer); clearInterval(flyTimer); waitSec=20; crashAt=newCrash(); isHost=true; startHeartbeat(); db.ref('multiplayerGame').set({status:'waiting', nextCrash:crashAt, currentMult:0, betTimeLeft:waitSec, hostId:myId, hostHeartbeat:Date.now(), updatedAt:Date.now(), crashedAt:0}); waitTimer=setInterval(()=>{waitSec--; db.ref('multiplayerGame').update({betTimeLeft:waitSec, updatedAt:Date.now(), hostHeartbeat:Date.now()}); if(waitSec<=0){clearInterval(waitTimer); startFlyingAsHost();}},1000);}
+function startFlyingAsHost(){clearInterval(flyTimer); mult=1; db.ref('multiplayerGame').update({status:'flying', currentMult:1, updatedAt:Date.now()}); flyTimer=setInterval(()=>{mult+=0.02+mult*0.013; db.ref('multiplayerGame').update({currentMult:mult, updatedAt:Date.now(), hostHeartbeat:Date.now()}); if(mult>=crashAt){clearInterval(flyTimer); db.ref('multiplayerGame').update({status:'crashed', crashedAt:crashAt, updatedAt:Date.now()}); db.ref('crashHistory').push({crash:crashAt,time:Date.now()}); setTimeout(()=>{startWaitingAsHost();},4000);}},80);}
+db.ref('multiplayerGame').on('value',s=>{
+  if(!s.exists()){tryBecomeHost(); return;}
+  let g=s.val();
+  if(isHost && g.hostId!==myId){if(Date.now()-g.hostHeartbeat<6000){isHost=false; clearInterval(hostTimer); clearInterval(waitTimer); clearInterval(flyTimer);}}
+  gameStatus=g.status; mult=g.currentMult||0; crashAt=g.nextCrash||0;
+  let multEl=document.getElementById('mult'), planeEl=document.getElementById('plane'), lineEl=document.getElementById('line'), timerEl=document.getElementById('betTimer');
+  if(g.status=='waiting'){
+    multEl.className='mult wait'; multEl.innerHTML=`BET TIME<br>${g.betTimeLeft||20}s`; timerEl.innerText=`BET TIME ${g.betTimeLeft||20}s`;
+    planeEl.innerHTML='✈️'; planeEl.style.left='10%'; planeEl.style.bottom='20%'; lineEl.style.width='0%';
+    if(!betPlaced){ betBtn.disabled=false; betBtn.innerText='BET ৳'+bet; }
+    cashBtn.disabled=true; cashBtn.innerText='CASHOUT';
+  }else if(g.status=='flying'){
+    multEl.className='mult'; multEl.innerHTML=mult.toFixed(2)+'x'; timerEl.innerText='FLYING '+mult.toFixed(2)+'x - BET CLOSED';
+    planeEl.style.left=(10+mult*4.2)+'%'; planeEl.style.bottom=(20+mult*6.8)+'%'; lineEl.style.width=(mult*8)+'%';
+    betBtn.disabled=true; betBtn.innerText='BET CLOSED';
+    if(betPlaced&&!cashed){cashBtn.disabled=false; cashBtn.innerText='CASHOUT ৳'+Math.floor(bet*mult);}
+  }else if(g.status=='crashed'){
+    multEl.className='mult crash'; multEl.innerHTML=g.crashedAt.toFixed(2)+'x<br><span style="font-size:14px">CRASHED!</span>'; timerEl.innerText='CRASHED '+g.crashedAt.toFixed(2)+'x'; planeEl.innerHTML='💥';
+    betPlaced=false; betBtn.disabled=true; betBtn.innerText='WAITING...';
+  }
+});
+setInterval(()=>{if(!isHost) tryBecomeHost();},5000); tryBecomeHost();
+db.ref('crashHistory').limitToLast(15).on('value',s=>{let h=''; s.forEach(c=>{let v=c.val().crash; h=`<div style="padding:5px 10px;border-radius:20px;font-size:11px;background:#1d224d;border:1px solid #333;color:${v<2?'#ff4d4d':'#00ff88'}">${v.toFixed(2)}x</div>`+h;}); histBar.innerHTML=h;});
+</script></body></html>
